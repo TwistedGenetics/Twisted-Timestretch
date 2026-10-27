@@ -122,9 +122,23 @@ void AkaiLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b
 }
 
 void AkaiLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, int h,
-                                        float pos, float, float, juce::Slider::SliderStyle, juce::Slider& s)
+                                        float pos, float, float, juce::Slider::SliderStyle style, juce::Slider& s)
 {
     const auto r = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
+
+    if (style == juce::Slider::LinearBar)
+    {
+        // A number box you can drag: white field, light fill for the position.
+        auto box = s.getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (Palette::white);
+        g.fillRoundedRectangle (box, 4.0f);
+        g.setColour (Palette::lcd);
+        g.fillRoundedRectangle (box.withRight (juce::jmax (box.getX(), pos)), 4.0f);
+        g.setColour (s.isEnabled() ? Palette::ink : Palette::line);
+        g.drawRoundedRectangle (box, 4.0f, 2.0f);
+        return;
+    }
+
     const float trackH = 12.0f;
     auto track = r.withSizeKeepingCentre (r.getWidth(), trackH);
     const bool en = s.isEnabled();
@@ -151,8 +165,10 @@ juce::Label* AkaiLookAndFeel::createSliderTextBox (juce::Slider& s)
     l->setFont (Fonts::mono (26.0f));
     l->setJustificationType (juce::Justification::centred);
     l->setColour (juce::Label::textColourId, Palette::ink);
-    l->setColour (juce::Label::backgroundColourId, Palette::white);
-    l->setColour (juce::Label::outlineColourId, Palette::ink);
+    const bool bar = s.getSliderStyle() == juce::Slider::LinearBar;
+    l->setColour (juce::Label::backgroundColourId, bar ? juce::Colours::transparentBlack : Palette::white);
+    l->setColour (juce::Label::outlineColourId, bar ? juce::Colours::transparentBlack : Palette::ink);
+    if (bar) l->setFont (Fonts::mono (22.0f));
     l->setColour (juce::Label::textWhenEditingColourId, Palette::ink);
     l->setColour (juce::TextEditor::textColourId, Palette::ink);
     l->setColour (juce::TextEditor::backgroundColourId, Palette::white);

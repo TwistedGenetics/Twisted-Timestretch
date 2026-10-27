@@ -43,7 +43,17 @@ jobs:
           exit $code
 
       - name: Render UI snapshot
-        run: ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests --snapshot ui-snapshot.png
+        run: |
+          ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests --snapshot ui-snapshot.png
+          ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests --snapshot-app app-snapshot.png
+
+      - name: Check the standalone app bundle
+        run: |
+          app="build/TwistedTimestretch_artefacts/Release/Standalone/TwistedTimestretch.app"
+          test -x "$app/Contents/MacOS/TwistedTimestretch"
+          test -f "$app/Contents/Resources/Icon.icns" || { echo "::error title=App::no app icon in the bundle"; ls -R "$app/Contents/Resources"; exit 1; }
+          lipo -archs "$app/Contents/MacOS/TwistedTimestretch"
+          echo "::notice title=App::$(lipo -archs "$app/Contents/MacOS/TwistedTimestretch") app bundle with icon"
 
       - name: Ad-hoc sign
         run: |
@@ -88,7 +98,7 @@ jobs:
           ditto build/TwistedTimestretch_artefacts/Release/AU/TwistedTimestretch.component dist/TwistedTimestretch.component
           ditto build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3 dist/TwistedTimestretch.vst3
           ditto "build/TwistedTimestretch_artefacts/Release/Standalone/TwistedTimestretch.app" "dist/Twisted Timestretch.app"
-          cp ui-snapshot.png dist/
+          cp ui-snapshot.png app-snapshot.png dist/
           cp web/Akaizer.html dist/Akaizer-browser.html
           cat > dist/INSTALL.txt <<'EOF'
           TWISTED TIMESTRETCH - install

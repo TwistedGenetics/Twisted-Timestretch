@@ -15,6 +15,7 @@ namespace ParamIDs
     inline constexpr const char* pitch      = "pitch";
     inline constexpr const char* tempoSync  = "tempoSync";
     inline constexpr const char* loopBpm    = "loopBpm";
+    inline constexpr const char* targetBpm  = "targetBpm";
     inline constexpr const char* playMode   = "playMode";
     inline constexpr const char* rootNote   = "rootNote";
     inline constexpr const char* keyTrack   = "keyTrack";
@@ -74,6 +75,11 @@ public:
     int getEffectiveFrequency() const;                       // manual value or 41000 / cycle
     bool isTempoSyncActive() const;
     double getHostBpm() const noexcept { return hostBpm.load(); }
+    /** Tempo SYNC stretches to: the host's tempo, or in the standalone app (no host)
+        the TARGET BPM setting. 0 when there is nothing to sync to. */
+    double getSyncBpm() const;
+    bool usesTargetTempo() const noexcept { return useTargetTempo; }
+    void setUseTargetTempo (bool b) noexcept { useTargetTempo = b; markDirty(); }
     static double guessLoopBpm (double seconds);
 
     // --- Preview from the UI (picked up by the audio thread)
@@ -125,6 +131,8 @@ private:
     std::atomic<float>* pPitch = nullptr;
     std::atomic<float>* pTempoSync = nullptr;
     std::atomic<float>* pLoopBpm = nullptr;
+    std::atomic<float>* pTargetBpm = nullptr;
+    bool useTargetTempo = false;
     std::atomic<float>* pPlayMode = nullptr;
     std::atomic<float>* pRootNote = nullptr;
     std::atomic<float>* pKeyTrack = nullptr;

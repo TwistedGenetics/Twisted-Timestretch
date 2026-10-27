@@ -58,6 +58,7 @@ juce_add_plugin(TwistedTimestretch
     VST3_CATEGORIES             Instrument Sampler
     AU_MAIN_TYPE                kAudioUnitType_MusicDevice
     MICROPHONE_PERMISSION_ENABLED FALSE
+    ICON_BIG                    ${CMAKE_CURRENT_SOURCE_DIR}/Resources/AppIcon.png
     COPY_PLUGIN_AFTER_BUILD     ${TT_COPY_AFTER_BUILD})
 
 juce_generate_juce_header(TwistedTimestretch)

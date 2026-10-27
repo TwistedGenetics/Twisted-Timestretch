@@ -80,7 +80,7 @@ private:
     PanelBlock pitchBlock { "PITCH" }, gainBlock { "GAIN" }, tempoBlock { "LOOP BPM" };
     PanelBlock modeBlock { "PLAY MODE" }, rootBlock { "ROOT NOTE" }, keysBlock { "" };
 
-    juce::Slider stretchSlider, cycleSlider, freqSlider, pitchSlider, gainSlider, bpmSlider, rootSlider;
+    juce::Slider stretchSlider, cycleSlider, freqSlider, pitchSlider, gainSlider, bpmSlider, rootSlider, targetSlider;
     juce::ToggleButton manualToggle { "MANUAL" }, syncToggle { "SYNC" };
     juce::ToggleButton keyTrackToggle { "KEY TRACK" }, chokeToggle { "CHOKE" }, velocityToggle { "VELOCITY" };
     juce::ComboBox modeBox;

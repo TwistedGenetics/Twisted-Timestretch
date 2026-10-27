@@ -39,11 +39,20 @@ Universal binary (Apple Silicon + Intel), macOS 11 or later.
 | CYCLE LENGTH | 20 – 2000 samples. Each grain is twice this long (half-sine window). |
 | CYCLE FREQ | 20 – 2050 cps. How often grains are laid down (sample rate ÷ this). Linked to `41000 ÷ cycle length` like the original until you tick **MANUAL**. |
 | PITCH | ±24 semitones of sampler-style repitch *before* stretching. The final length stays at STRETCH %, so "pitch up, stretch back to length" is one move. |
-| LOOP BPM + SYNC | With SYNC on, STRETCH follows the host: `loop BPM ÷ host BPM`. The loop BPM is guessed from the sample length on load. |
+| LOOP BPM + SYNC | With SYNC on, STRETCH follows the host: `loop BPM ÷ host BPM`. The loop BPM is guessed from the sample length on load. In the standalone app (no host) the box shows **LOOP** and **TO** fields: SYNC stretches the loop to the TO tempo. |
 | PLAY MODE | One-shot (plays to the end), Gate (stops on key up), Loop (loops while held). |
 | ROOT NOTE / KEY TRACK | Root plays at original pitch; with KEY TRACK on, other keys repitch like a sampler. |
 | CHOKE | A new note cuts the previous one (mono, as for breaks). |
 | VELOCITY / GAIN | Velocity sensitivity and output level. |
+
+### The standalone app
+
+`Twisted Timestretch.app` is the whole instrument without a DAW, which is
+the closest thing to the original Akaizer on a Mac: load a break, set the
+tempo it's at (LOOP) and the tempo you want (TO), tick SYNC, press PREVIEW,
+then SAVE WAV. A MIDI keyboard plays it too: pick it, and the sound card,
+under **Options > Audio/MIDI Settings** at the top of the window. The app
+remembers the last sample and settings between launches.
 
 The sample is saved inside your project, so sessions open on another machine
 without the original file.

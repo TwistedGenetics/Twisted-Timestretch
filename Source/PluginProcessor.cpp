@@ -56,6 +56,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout TimestretchProcessor::create
         AudioParameterFloatAttributes().withLabel ("BPM")
             .withStringFromValueFunction ([] (float v, int) { return String (v, 2); })));
 
+    p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamIDs::targetBpm, 1 }, "Target BPM",
+        NormalisableRange<float> (40.0f, 300.0f, 0.01f), 170.0f,
+        AudioParameterFloatAttributes().withLabel ("BPM")
+            .withStringFromValueFunction ([] (float v, int) { return String (v, 2); })));
+
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamIDs::playMode, 1 }, "Play Mode",
         StringArray { "One-shot", "Gate", "Loop" }, 0));
 
@@ -93,6 +98,10 @@ TimestretchProcessor::TimestretchProcessor()
     pPitch      = apvts.getRawParameterValue (ParamIDs::pitch);
     pTempoSync  = apvts.getRawParameterValue (ParamIDs::tempoSync);
     pLoopBpm    = apvts.getRawParameterValue (ParamIDs::loopBpm);
+    pTargetBpm  = apvts.getRawParameterValue (ParamIDs::targetBpm);
+
+    // The standalone app has no host tempo; SYNC uses TARGET BPM there instead.
+    useTargetTempo = wrapperType == wrapperType_Standalone;
     pPlayMode   = apvts.getRawParameterValue (ParamIDs::playMode);
     pRootNote   = apvts.getRawParameterValue (ParamIDs::rootNote);
     pKeyTrack   = apvts.getRawParameterValue (ParamIDs::keyTrack);
@@ -101,7 +110,7 @@ TimestretchProcessor::TimestretchProcessor()
     pGain       = apvts.getRawParameterValue (ParamIDs::gain);
 
     for (auto* id : { ParamIDs::stretch, ParamIDs::cycleLen, ParamIDs::cycleFreq, ParamIDs::freqManual,
-                      ParamIDs::pitch, ParamIDs::tempoSync, ParamIDs::loopBpm })
+                      ParamIDs::pitch, ParamIDs::tempoSync, ParamIDs::loopBpm, ParamIDs::targetBpm })
         apvts.addParameterListener (id, this);
 
     renderThread.startThread (juce::Thread::Priority::low);
@@ -111,7 +120,7 @@ TimestretchProcessor::~TimestretchProcessor()
 {
     renderThread.stopThread (2000);
     for (auto* id : { ParamIDs::stretch, ParamIDs::cycleLen, ParamIDs::cycleFreq, ParamIDs::freqManual,
-                      ParamIDs::pitch, ParamIDs::tempoSync, ParamIDs::loopBpm })
+                      ParamIDs::pitch, ParamIDs::tempoSync, ParamIDs::loopBpm, ParamIDs::targetBpm })
         apvts.removeParameterListener (id, this);
 }
 
@@ -149,7 +158,7 @@ void TimestretchProcessor::RenderThread::run()
         if (threadShouldExit()) break;
 
         // Follow the host's tempo while sync is on.
-        if (owner.isTempoSyncActive() && std::abs (owner.hostBpm.load() - owner.renderedSyncBpm.load()) > 0.001)
+        if (owner.isTempoSyncActive() && std::abs (owner.getSyncBpm() - owner.renderedSyncBpm.load()) > 0.001)
         {
             owner.dirtySince.store (0.0);
             owner.dirty.store (true);
@@ -166,13 +175,19 @@ void TimestretchProcessor::RenderThread::run()
 
 bool TimestretchProcessor::isTempoSyncActive() const
 {
-    return pTempoSync->load() > 0.5f && hostBpm.load() > 0.0 && pLoopBpm->load() > 0.0f;
+    return pTempoSync->load() > 0.5f && getSyncBpm() > 0.0 && pLoopBpm->load() > 0.0f;
+}
+
+double TimestretchProcessor::getSyncBpm() const
+{
+    if (const double h = hostBpm.load(); h > 0.0) return h;
+    return useTargetTempo ? (double) pTargetBpm->load() : 0.0;
 }
 
 double TimestretchProcessor::getEffectiveStretch() const
 {
     if (isTempoSyncActive())
-        return juce::jlimit (25.0, 2000.0, (double) pLoopBpm->load() / hostBpm.load() * 100.0);
+        return juce::jlimit (25.0, 2000.0, (double) pLoopBpm->load() / getSyncBpm() * 100.0);
     return (double) pStretch->load();
 }
 
@@ -252,7 +267,7 @@ bool TimestretchProcessor::renderNow()
     s.cycleLength    = (int) std::lround (pCycleLen->load());
     s.cycleFrequency = getEffectiveFrequency();
     const double semis = std::round (pPitch->load());
-    const double syncBpm = isTempoSyncActive() ? hostBpm.load() : 0.0;
+    const double syncBpm = isTempoSyncActive() ? getSyncBpm() : 0.0;
 
     auto res = akaizer::render (src->pcm.data(), src->pcm.size(), src->channels, src->sampleRate, s, semis);
 

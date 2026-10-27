@@ -8,6 +8,7 @@
         choke, preview, tempo sync, state save / restore.
 
     Also renders the editor to a PNG:  TwistedTimestretchTests --snapshot out.png
+    (the standalone app's version:      TwistedTimestretchTests --snapshot-app out.png)
 */
 #include <JuceHeader.h>
 #include "Engine/Akaizer.h"
@@ -178,7 +179,7 @@ static void processorTests()
     std::cout << "\n== Instrument ==" << std::endl;
     TimestretchProcessor p;
     p.prepareToPlay (44100.0, 512);
-    check (p.getParameters().size() == 13, "13 automatable parameters");
+    check (p.getParameters().size() == 14, "14 automatable parameters");
     check (p.getEffectiveFrequency() == 51, "default cycle frequency is linked: 51");
 
     p.setSource (testSource (44100, 1, 44100.0), true);
@@ -283,6 +284,24 @@ static void processorTests()
     blockRms (p);
     check (waitForRender (p, v) && std::abs (p.getRendered()->stretchPercent - 75.0) < 0.01, "SYNC: re-renders when the host tempo changes");
     p.setPlayHead (nullptr);
+
+    // Standalone app: no host tempo, so SYNC follows TARGET BPM.
+    {
+        TimestretchProcessor app;
+        app.prepareToPlay (44100.0, 512);
+        app.setSource (testSource (44100, 1, 44100.0), true);       // loop BPM guessed: 120
+        app.apvts.getParameter (ParamIDs::tempoSync)->setValueNotifyingHost (1.0f);
+        check (! app.isTempoSyncActive(), "plugin with no host tempo: SYNC has nothing to follow");
+        app.setUseTargetTempo (true);
+        auto* target = app.apvts.getParameter (ParamIDs::targetBpm);
+        target->setValueNotifyingHost (target->convertTo0to1 (160.0f));
+        const auto v0 = app.getRenderVersion();
+        check (app.isTempoSyncActive() && std::abs (app.getEffectiveStretch() - 75.0) < 0.01,
+               "standalone app: SYNC uses TARGET BPM (120 -> 160 = 75%)");
+        check (waitForRender (app, v0) && std::abs ((int) app.getRendered()->pcm.size() - 33075) <= 1,
+               "standalone app: render follows TARGET BPM");
+    }
+
     sync->setValueNotifyingHost (0.0f);
 
     // Save WAV
@@ -316,9 +335,10 @@ static void processorTests()
     check (blockRms (q, on) > 0.01f, "restored instance plays at a different sample rate");
 }
 
-static int snapshot (const juce::String& path)
+static int snapshot (const juce::String& path, bool standaloneApp)
 {
     TimestretchProcessor p;
+    p.setUseTargetTempo (standaloneApp);
     p.prepareToPlay (44100.0, 512);
     auto s = testSource (88200, 2, 44100.0);
     s->name = "think_break_136";
@@ -342,7 +362,9 @@ int main (int argc, char* argv[])
 {
     juce::ScopedJuceInitialiser_GUI gui;
     if (argc >= 3 && juce::String (argv[1]) == "--snapshot")
-        return snapshot (argv[2]);
+        return snapshot (argv[2], false);
+    if (argc >= 3 && juce::String (argv[1]) == "--snapshot-app")
+        return snapshot (argv[2], true);
 
     engineTests();
     ioTests();

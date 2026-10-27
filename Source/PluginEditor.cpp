@@ -121,6 +121,25 @@ TimestretchEditor::TimestretchEditor (TimestretchProcessor& p)
     setupSlider (gainSlider, gainBlock, ParamIDs::gain, 140);
     setupSlider (bpmSlider, tempoBlock, ParamIDs::loopBpm, 120);
     setupSlider (rootSlider, rootBlock, ParamIDs::rootNote, 100);
+
+    // The standalone app has no host tempo, so the tempo box gets LOOP and TARGET fields.
+    if (proc.usesTargetTempo())
+    {
+        setupSlider (targetSlider, tempoBlock, ParamIDs::targetBpm, 120);
+        for (auto* s : { &bpmSlider, &targetSlider })
+        {
+            s->setSliderStyle (juce::Slider::LinearBar);
+            s->setTextBoxStyle (juce::Slider::TextBoxLeft, false, 0, 0);
+            s->setScrollWheelEnabled (true);
+        }
+        bpmSlider.textFromValueFunction = [] (double v) { return "LOOP " + juce::String (v, 1); };
+        targetSlider.textFromValueFunction = [] (double v) { return "TO " + juce::String (v, 1); };
+        bpmSlider.valueFromTextFunction = targetSlider.valueFromTextFunction =
+            [] (const juce::String& t) { return t.retainCharacters ("0123456789.").getDoubleValue(); };
+        tempoBlock.setTitle ("TEMPO");
+        bpmSlider.updateText();
+        targetSlider.updateText();
+    }
     pitchSlider.setDoubleClickReturnValue (true, 0.0);
     gainSlider.setDoubleClickReturnValue (true, 0.0);
     stretchSlider.setDoubleClickReturnValue (true, 100.0);
@@ -228,6 +247,14 @@ void TimestretchEditor::layoutPanel()
                          { &bpmSlider, &tempoBlock }, { &rootSlider, &rootBlock } })
         s->setBounds (b->content().withSizeKeepingCentre (b->content().getWidth(), 46));
 
+    if (proc.usesTargetTempo())
+    {
+        auto c = tempoBlock.content().withSizeKeepingCentre (tempoBlock.content().getWidth(), 46);
+        bpmSlider.setBounds (c.removeFromLeft (c.getWidth() / 2 - 5));
+        c.removeFromLeft (10);
+        targetSlider.setBounds (c);
+    }
+
     manualToggle.setBounds (freqBlock.titleArea().removeFromRight (122));
     syncToggle.setBounds (tempoBlock.titleArea().removeFromRight (100));
     modeBox.setBounds (modeBlock.content().withSizeKeepingCentre (modeBlock.content().getWidth(), 44));
@@ -299,7 +326,7 @@ void TimestretchEditor::refreshDisplays (bool force)
                             + juce::String (hop, (r->outHopWords % r->channels) != 0 ? 1 : 0) + " SMP   "
                             + juce::String (r->stretchPercent, 2) + "%";
         if (std::abs (r->semitones) > 0.5) line << "   " << (r->semitones > 0 ? "+" : "") << juce::String ((int) r->semitones) << " ST";
-        if (proc.isTempoSyncActive()) line << "   SYNC " << juce::String (proc.getHostBpm(), 1) << " BPM";
+        if (proc.isTempoSyncActive()) line << "   SYNC " << juce::String (proc.getSyncBpm(), 1) << " BPM";
         lines.add (line);
     }
     else
