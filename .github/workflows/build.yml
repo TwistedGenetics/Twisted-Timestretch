@@ -25,7 +25,12 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Build
-        run: cmake --build build --config Release -j 4
+        run: |
+          set -o pipefail
+          cmake --build build --config Release -j 4 2>&1 | tee build.log || {
+            grep -E "error:|Error " build.log | head -20 | while IFS= read -r line; do echo "::error title=Build::$line"; done
+            exit 1
+          }
 
       - name: Run tests
         run: |

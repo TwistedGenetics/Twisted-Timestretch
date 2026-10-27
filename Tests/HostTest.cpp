@@ -9,9 +9,6 @@
 */
 #include <JuceHeader.h>
 #include <iostream>
-#if JUCE_MAC
- #include <CoreFoundation/CoreFoundation.h>
-#endif
 
 static int failures = 0, checks = 0;
 static void check (bool ok, const juce::String& what)
@@ -42,33 +39,19 @@ static bool injectRawState (juce::AudioPluginInstance& inst, const juce::MemoryB
     }
 
    #if JUCE_MAC
-    // AU: the ClassInfo dictionary, usually a binary plist. Swap in our chunk.
-    if (auto* cfData = CFDataCreate (nullptr, (const UInt8*) current.getData(), (CFIndex) current.getSize()))
+    // AU: the ClassInfo dictionary is usually a binary plist. Let macOS's plutil
+    // turn it into XML (the host accepts either), then patch it below.
+    if (current.getSize() > 8 && std::memcmp (current.getData(), "bplist", 6) == 0)
     {
-        bool done = false;
-        CFPropertyListFormat fmt;
-        if (auto plist = CFPropertyListCreateWithData (nullptr, cfData, kCFPropertyListMutableContainersAndLeaves, &fmt, nullptr))
+        auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("tt-au-state.plist");
+        tmp.replaceWithData (current.getData(), current.getSize());
+        juce::ChildProcess p;
+        if (p.start (juce::StringArray { "/usr/bin/plutil", "-convert", "xml1", tmp.getFullPathName() }))
         {
-            if (CFGetTypeID (plist) == CFDictionaryGetTypeID())
-            {
-                auto dict = (CFMutableDictionaryRef) plist;
-                if (CFDictionaryContainsKey (dict, CFSTR ("jucePluginState")))
-                {
-                    auto* chunk = CFDataCreate (nullptr, (const UInt8*) raw.getData(), (CFIndex) raw.getSize());
-                    CFDictionarySetValue (dict, CFSTR ("jucePluginState"), chunk);
-                    CFRelease (chunk);
-                    if (auto* out = CFPropertyListCreateData (nullptr, plist, fmt, 0, nullptr))
-                    {
-                        inst.setStateInformation (CFDataGetBytePtr (out), (int) CFDataGetLength (out));
-                        CFRelease (out);
-                        done = true;
-                    }
-                }
-            }
-            CFRelease (plist);
+            p.waitForProcessToFinish (10000);
+            current.reset();
+            tmp.loadFileAsData (current);
         }
-        CFRelease (cfData);
-        if (done) return true;
     }
    #endif
 
