@@ -1,0 +1,513 @@
+<title>Akaizer for Mac</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one sampler front panel — LCD readout on top, three big parameter keys, transport row, two waveform strips. */
+:root {
+  --panel: #dcdad3;      /* warm sampler-casing grey */
+  --panel-2: #ecebe6;
+  --ink: #15171a;
+  --ink-soft: #3d4148;
+  --line: #9c9a92;
+  --lcd: #c7d6a2;        /* backlit LCD green, dark text on it */
+  --lcd-ink: #142008;
+  --accent: #c2410c;     /* Akai-ish red/orange key */
+  --accent-ink: #ffffff;
+  --wave-in: #2b4a7a;
+  --wave-out: #b3360a;
+  --ok: #1d6b34;
+  --bad: #a3121a;
+  --f-display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--panel); color: var(--ink); }
+body {
+  font-family: var(--f-body);
+  font-size: 18px;
+  line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 22px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 2.6rem; letter-spacing: 0.04em; margin: 0; line-height: 1; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { font-family: var(--f-mono); font-size: 0.95rem; color: var(--ink-soft); letter-spacing: 0.03em; }
+
+.lcd {
+  background: var(--lcd); color: var(--lcd-ink);
+  border: 3px solid var(--ink); border-radius: 6px;
+  padding: 14px 18px; font-family: var(--f-mono); font-weight: 600;
+  display: grid; gap: 4px; min-width: 0;
+  box-shadow: inset 0 2px 0 rgba(0,0,0,0.12);
+}
+.lcd .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 18px; font-size: 1.25rem; }
+.lcd .row b { font-weight: 600; }
+.lcd .name { font-size: 1.5rem; overflow-wrap: anywhere; }
+.lcd .status { font-size: 1.1rem; min-height: 1.6em; }
+.lcd .status.bad { color: var(--bad); }
+
+.drop {
+  border: 3px dashed var(--line); border-radius: 6px; background: var(--panel-2);
+  padding: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
+  font-size: 1.1rem;
+}
+.drop.over { border-color: var(--accent); background: #fff4ec; }
+.drop p { margin: 0; flex: 1 1 260px; min-width: 0; }
+
+.params { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .params { grid-template-columns: 1fr; } }
+.param { background: var(--panel-2); border: 2px solid var(--ink); border-radius: 6px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.param label { font-family: var(--f-display); font-weight: 700; font-size: 1.2rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.param input[type=number] {
+  width: 100%; font-family: var(--f-mono); font-weight: 600; font-size: 2.1rem;
+  padding: 6px 10px; border: 2px solid var(--ink); border-radius: 4px; background: #fff; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.param input[type=number]:disabled { background: var(--panel); color: var(--ink-soft); }
+.param input[type=range] { width: 100%; accent-color: var(--accent); }
+.param .range { font-family: var(--f-mono); font-size: 0.95rem; color: var(--ink-soft); }
+.param .note { font-size: 0.98rem; color: var(--ink-soft); }
+.toggle { display: flex; align-items: center; gap: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+.toggle input { width: 22px; height: 22px; accent-color: var(--accent); }
+
+.bpm { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel-2); border: 2px solid var(--line); border-radius: 6px; padding: 12px 16px; }
+.bpm .lbl { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 1.05rem; flex-basis: 100%; }
+.bpm label { display: grid; gap: 2px; font-size: 0.95rem; color: var(--ink-soft); }
+.bpm input { width: 7.5em; font-family: var(--f-mono); font-size: 1.4rem; font-weight: 600; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 4px; background: #fff; color: var(--ink); }
+
+.keys { display: flex; flex-wrap: wrap; gap: 12px; }
+button, .filebtn {
+  font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.08em; text-transform: uppercase;
+  border: 2px solid var(--ink); border-radius: 5px; padding: 12px 20px; cursor: pointer;
+  background: #fff; color: var(--ink); box-shadow: 0 3px 0 var(--ink);
+}
+button:active, .filebtn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+button:disabled { opacity: 0.45; cursor: default; transform: none; box-shadow: 0 3px 0 var(--ink); }
+button.primary { background: var(--accent); color: var(--accent-ink); font-size: 1.35rem; padding: 14px 28px; }
+button:focus-visible, .filebtn:focus-within, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.waves { display: grid; gap: 12px; }
+.wave { background: var(--panel-2); border: 2px solid var(--ink); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0; }
+.wave .cap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 14px; font-family: var(--f-mono); font-weight: 600; font-size: 1.05rem; }
+.wave canvas { width: 100%; height: 110px; display: block; background: #fff; border: 1px solid var(--line); border-radius: 3px; }
+
+details { background: var(--panel-2); border: 2px solid var(--line); border-radius: 6px; padding: 12px 16px; }
+summary { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 1.1rem; cursor: pointer; }
+details p, details li { max-width: 68ch; }
+code { font-family: var(--f-mono); font-size: 0.92em; background: #fff; padding: 1px 5px; border-radius: 3px; }
+footer { font-size: 0.95rem; color: var(--ink-soft); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>AKAIZER <span>v1.2</span></h1>
+    <div class="sub">MAC PORT · ORIGINAL BY BEN BURCHETT</div>
+  </header>
+
+  <section class="lcd" aria-live="polite">
+    <div class="name" id="lcdName">NO SAMPLE LOADED</div>
+    <div class="row"><span id="lcdFmt">--</span><span id="lcdLen">--</span></div>
+    <div class="row"><span>CYCLE <b id="lcdCycle">--</b></span><span>HOP <b id="lcdHop">--</b></span><span>OUT <b id="lcdOut">--</b></span></div>
+    <div class="status" id="status">Drop a WAV or AIFF below, or use the demo loop.</div>
+  </section>
+
+  <section class="drop" id="drop">
+    <p>Drag a WAV or AIFF file here. 16-bit WAV is processed exactly as the original; other bit depths are converted to 16-bit first.</p>
+    <label class="filebtn">Open file<input type="file" id="file" accept=".wav,.wave,.aif,.aiff,audio/wav,audio/x-wav,audio/aiff"></label>
+    <button id="demoBtn" type="button">Demo loop</button>
+  </section>
+
+  <section class="params">
+    <div class="param">
+      <label for="stretch">Stretch Length</label>
+      <input type="number" id="stretch" min="25" max="2000" step="0.01" value="100">
+      <input type="range" id="stretchR" min="25" max="400" step="1" value="100" aria-label="Stretch length slider">
+      <div class="range">RANGE 25% – 2000%</div>
+    </div>
+    <div class="param">
+      <label for="cycle">Cycle Length</label>
+      <input type="number" id="cycle" min="20" max="2000" step="1" value="800">
+      <input type="range" id="cycleR" min="20" max="2000" step="1" value="800" aria-label="Cycle length slider">
+      <div class="range">RANGE 20 – 2000 SAMPLES</div>
+    </div>
+    <div class="param">
+      <label for="freq">Cycle Frequency</label>
+      <input type="number" id="freq" min="20" max="2050" step="1" value="51" disabled>
+      <input type="range" id="freqR" min="20" max="2050" step="1" value="51" disabled aria-label="Cycle frequency slider">
+      <div class="range">RANGE 20 – 2050 CPS</div>
+      <label class="toggle"><input type="checkbox" id="freqOn"> Set frequency by hand</label>
+      <div class="note" id="freqNote">Linked: 41000 ÷ cycle length, as in the original.</div>
+    </div>
+  </section>
+
+  <section class="bpm">
+    <div class="lbl">Tempo helper</div>
+    <label for="bpmFrom">Loop BPM<input type="number" id="bpmFrom" min="20" max="400" step="0.01" placeholder="e.g. 136"></label>
+    <label for="bpmTo">Target BPM<input type="number" id="bpmTo" min="20" max="400" step="0.01" placeholder="e.g. 170"></label>
+    <button type="button" id="bpmApply">Set stretch</button>
+  </section>
+
+  <section class="keys">
+    <button class="primary" id="go" type="button" disabled>Timestretch</button>
+    <button id="playIn" type="button" disabled>Play original</button>
+    <button id="playOut" type="button" disabled>Play akaized</button>
+    <button id="stop" type="button">Stop</button>
+    <button id="save" type="button" disabled>Save WAV</button>
+  </section>
+
+  <section class="waves">
+    <div class="wave"><div class="cap"><span>INPUT</span><span id="capIn">—</span></div><canvas id="cvIn" height="110"></canvas></div>
+    <div class="wave"><div class="cap"><span>AKAIZED</span><span id="capOut">—</span></div><canvas id="cvOut" height="110"></canvas></div>
+  </section>
+
+  <details>
+    <summary>How it works</summary>
+    <p>This is a line-for-line port of the stretch routine inside the original <code>Akaizer.exe</code> (a Visual Basic 6 program from 2006), recovered from its machine code. The maths and quirks are unchanged:</p>
+    <ul>
+      <li>The audio is cut into grains of <b>2 × cycle length</b> samples, each shaped with a half-sine window.</li>
+      <li>Grains are laid down every <b>sample rate ÷ cycle frequency</b> samples and read from the input at that hop ÷ stretch. Overlaps are summed and hard-clipped to 16-bit, one grain at a time.</li>
+      <li>In linked mode the frequency is <code>41000 ÷ cycle length</code>. The original uses 41000, not 44100.</li>
+      <li>Stereo files are processed interleaved, as in the original. Odd hop sizes can swap left and right between grains, which is part of the original's sound.</li>
+      <li>Output is a 16-bit WAV named <code>yourfile_akaized.wav</code>. Inside Claude it saves as a .zip with the WAV inside, because the viewer only allows certain file types. If you open this page as a local file, it saves the WAV directly.</li>
+    </ul>
+    <p>Classic jungle trick: pitch a break up in your sampler or DAW first, then stretch it back to length here to get the metallic, granular texture.</p>
+  </details>
+  <footer>Runs entirely in your browser. Nothing is uploaded.</footer>
+</div>
+
+<script>
+/* ===== Core: faithful port of Akaizer v1.2 stretch routine ===== */
+const AK = (() => {
+  const PI_VB = 3.141592654;            // literal used by the original
+  // VB6 __vbaFpI4 / CInt: round half to even
+  function rint(x) {
+    const f = Math.floor(x), d = x - f;
+    if (d > 0.5) return f + 1;
+    if (d < 0.5) return f;
+    return (f % 2 === 0) ? f : f + 1;
+  }
+  function linkedFreq(cycleLen) { return rint(41000 / cycleLen); }
+
+  // input: Int16Array interleaved, channels, sampleRate. Returns Int16Array.
+  function stretch(input, channels, sampleRate, stretchPct, cycleLen, cycleFreq) {
+    const nIn = input.length;
+    const factor = stretchPct / 100;
+    const nOut = rint(nIn * factor);
+    const L = cycleLen * 2 * channels;                // grain length (words)
+    const C = rint((channels * sampleRate) / cycleFreq); // output hop (words)
+    const out = new Int16Array(Math.max(nOut, 0));
+    if (nOut <= 0 || C <= 0) return { out, L, C, S: 0 };
+    const S = rint(nIn / (nOut / C));                 // input hop (words)
+    const kMax = rint(nOut / C - 1);
+    const ubIn = nIn - 1, ubOut = nOut - 1;
+    for (let k = 0; k <= kMax; k++) {
+      const ib = S * k, ob = C * k;
+      for (let j = 0; j <= L - 1; j++) {
+        if (ib + j > ubIn) break;
+        if (ob + j > ubOut) break;
+        const g = Math.sin(((j + 1) * PI_VB) / L);
+        let v = rint(input[ib + j] * g + out[ob + j]);
+        if (v > 32767) v = 32767; else if (v < -32768) v = -32768;
+        out[ob + j] = v;
+      }
+    }
+    return { out, L, C, S };
+  }
+
+  // ---- file parsing ----
+  function q16(x) { let v = Math.round(x * 32767); return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
+  function str4(dv, o) { return String.fromCharCode(dv.getUint8(o), dv.getUint8(o+1), dv.getUint8(o+2), dv.getUint8(o+3)); }
+
+  function parseWav(buf) {
+    const dv = new DataView(buf);
+    if (buf.byteLength < 12 || str4(dv, 0) !== "RIFF" || str4(dv, 8) !== "WAVE") throw new Error("Not a valid WAV file.");
+    let p = 12, fmt = null, data = null;
+    while (p + 8 <= buf.byteLength) {
+      const id = str4(dv, p), size = dv.getUint32(p + 4, true), body = p + 8;
+      if (id === "fmt ") {
+        let tag = dv.getUint16(body, true);
+        const bits = dv.getUint16(body + 14, true);
+        if (tag === 0xFFFE && size >= 40) tag = dv.getUint16(body + 24, true);
+        fmt = { tag, channels: dv.getUint16(body + 2, true), rate: dv.getUint32(body + 4, true), bits };
+      } else if (id === "data") {
+        data = { off: body, len: Math.min(size, buf.byteLength - body) };
+        if (fmt) break;
+      }
+      p = body + size + (size & 1);
+    }
+    if (!fmt) throw new Error("WAV header has no format chunk.");
+    if (!data) throw new Error("WAV file has no audio data chunk.");
+    const { tag, channels, rate, bits } = fmt;
+    const bps = bits >> 3;
+    const n = Math.floor(data.len / bps);
+    const out = new Int16Array(n);
+    let o = data.off;
+    if (tag === 1 && bits === 16) { for (let i = 0; i < n; i++, o += 2) out[i] = dv.getInt16(o, true); }
+    else if (tag === 1 && bits === 8) { for (let i = 0; i < n; i++, o++) out[i] = (dv.getUint8(o) - 128) << 8; }
+    else if (tag === 1 && bits === 24) { for (let i = 0; i < n; i++, o += 3) { let v = dv.getUint8(o) | (dv.getUint8(o+1) << 8) | (dv.getInt8(o+2) << 16); out[i] = q16(v / 8388608); } }
+    else if (tag === 1 && bits === 32) { for (let i = 0; i < n; i++, o += 4) out[i] = q16(dv.getInt32(o, true) / 2147483648); }
+    else if (tag === 3 && bits === 32) { for (let i = 0; i < n; i++, o += 4) out[i] = q16(dv.getFloat32(o, true)); }
+    else if (tag === 3 && bits === 64) { for (let i = 0; i < n; i++, o += 8) out[i] = q16(dv.getFloat64(o, true)); }
+    else throw new Error("Unsupported WAV encoding (format " + tag + ", " + bits + "-bit).");
+    return { samples: out, channels, rate, bits, native16: tag === 1 && bits === 16, kind: "WAV" };
+  }
+
+  function ext80(dv, o) { // IEEE 754 80-bit extended, big-endian
+    const se = dv.getUint16(o), hi = dv.getUint32(o + 2), lo = dv.getUint32(o + 6);
+    const sign = se & 0x8000 ? -1 : 1, e = se & 0x7fff;
+    if (e === 0 && hi === 0 && lo === 0) return 0;
+    return sign * (hi * Math.pow(2, e - 16383 - 31) + lo * Math.pow(2, e - 16383 - 63));
+  }
+  function parseAiff(buf) {
+    const dv = new DataView(buf);
+    const form = str4(dv, 8);
+    if (str4(dv, 0) !== "FORM" || (form !== "AIFF" && form !== "AIFC")) throw new Error("Not a valid AIFF file.");
+    let p = 12, comm = null, ssnd = null;
+    while (p + 8 <= buf.byteLength) {
+      const id = str4(dv, p), size = dv.getUint32(p + 4), body = p + 8;
+      if (id === "COMM") {
+        comm = { channels: dv.getUint16(body), bits: dv.getUint16(body + 6), rate: Math.round(ext80(dv, body + 8)),
+                 comp: form === "AIFC" ? str4(dv, body + 18) : "NONE" };
+      } else if (id === "SSND") {
+        const offset = dv.getUint32(body);
+        ssnd = { off: body + 8 + offset, len: Math.min(size - 8 - offset, buf.byteLength - body - 8 - offset) };
+      }
+      p = body + size + (size & 1);
+    }
+    if (!comm || !ssnd) throw new Error("AIFF file is missing its format or sound data.");
+    const { channels, bits, rate, comp } = comm;
+    const le = comp === "sowt";
+    if (comp !== "NONE" && comp !== "sowt" && comp !== "twos" && comp !== "fl32" && comp !== "FL32") throw new Error("Compressed AIFF-C (" + comp + ") is not supported.");
+    const flt = comp === "fl32" || comp === "FL32";
+    const bps = Math.ceil(bits / 8), n = Math.floor(ssnd.len / bps), out = new Int16Array(n);
+    let o = ssnd.off;
+    for (let i = 0; i < n; i++, o += bps) {
+      if (flt) out[i] = q16(dv.getFloat32(o));
+      else if (bps === 1) out[i] = dv.getInt8(o) << 8;
+      else if (bps === 2) out[i] = dv.getInt16(o, le);
+      else if (bps === 3) { const v = le ? (dv.getUint8(o) | (dv.getUint8(o+1) << 8) | (dv.getInt8(o+2) << 16)) : ((dv.getInt8(o) << 16) | (dv.getUint8(o+1) << 8) | dv.getUint8(o+2)); out[i] = q16(v / 8388608); }
+      else out[i] = q16(dv.getInt32(o, le) / 2147483648);
+    }
+    return { samples: out, channels, rate, bits, native16: bits === 16 && !flt, kind: "AIFF" };
+  }
+
+  function parse(buf) {
+    const dv = new DataView(buf);
+    if (buf.byteLength >= 12 && str4(dv, 0) === "FORM") return parseAiff(buf);
+    return parseWav(buf);
+  }
+
+  function writeWav(samples, channels, rate) {
+    const dataBytes = samples.length * 2;
+    const buf = new ArrayBuffer(44 + dataBytes), dv = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); dv.setUint32(4, dataBytes + 36, true); w(8, "WAVE");
+    w(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, channels, true);
+    dv.setUint32(24, rate, true); dv.setUint32(28, rate * channels * 2, true); dv.setUint16(32, channels * 2, true); dv.setUint16(34, 16, true);
+    w(36, "data"); dv.setUint32(40, dataBytes, true);
+    new Int16Array(buf, 44).set(samples);
+    return buf;
+  }
+
+  // minimal store-only zip (one file)
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zip1(name, data) {
+    const nm = new TextEncoder().encode(name), u8 = new Uint8Array(data), crc = crc32(u8), sz = u8.length;
+    const lh = new DataView(new ArrayBuffer(30)), ch = new DataView(new ArrayBuffer(46)), eo = new DataView(new ArrayBuffer(22));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true);
+    lh.setUint16(26, nm.length, true); lh.setUint16(28, 0, true);
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true);
+    ch.setUint16(28, nm.length, true); ch.setUint32(42, 0, true);
+    const cdOff = 30 + nm.length + sz, cdLen = 46 + nm.length;
+    eo.setUint32(0, 0x06054b50, true); eo.setUint16(8, 1, true); eo.setUint16(10, 1, true); eo.setUint32(12, cdLen, true); eo.setUint32(16, cdOff, true);
+    return new Blob([lh.buffer, nm, u8, ch.buffer, nm, eo.buffer], { type: "application/zip" });
+  }
+
+  return { rint, linkedFreq, stretch, parse, writeWav, zip1, crc32 };
+})();
+if (typeof module !== "undefined") module.exports = AK;
+</script>
+
+<script>
+/* ===== UI ===== */
+(() => {
+  if (typeof document === "undefined") return;
+  const $ = id => document.getElementById(id);
+  const st = { src: null, name: "", out: null, outName: "" };
+  let actx = null, playing = null;
+
+  const status = (msg, bad) => { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); };
+  const fmtTime = (frames, rate) => (frames / rate).toFixed(3) + " s";
+
+  function clampNum(v, lo, hi, dflt) { v = parseFloat(v); if (!isFinite(v)) return dflt; return Math.min(hi, Math.max(lo, v)); }
+  function params() {
+    const stretch = clampNum($("stretch").value, 25, 2000, 100);
+    const cycle = Math.round(clampNum($("cycle").value, 20, 2000, 800));
+    const freq = $("freqOn").checked ? Math.round(clampNum($("freq").value, 20, 2050, 51)) : AK.linkedFreq(cycle);
+    return { stretch, cycle, freq };
+  }
+  function refreshLcd() {
+    const p = params();
+    if (!$("freqOn").checked) { $("freq").value = p.freq; $("freqR").value = p.freq; }
+    if (!st.src) { $("lcdCycle").textContent = p.cycle + " SMP"; $("lcdHop").textContent = "--"; $("lcdOut").textContent = "--"; return; }
+    const { channels, rate, samples } = st.src;
+    const C = AK.rint(channels * rate / p.freq);
+    $("lcdCycle").textContent = (p.cycle * 2) + " SMP GRAIN";
+    $("lcdHop").textContent = (C / channels).toFixed(C % channels ? 1 : 0) + " SMP";
+    $("lcdOut").textContent = fmtTime(AK.rint(samples.length * p.stretch / 100) / channels, rate);
+  }
+
+  function bindPair(numId, rngId) {
+    const n = $(numId), r = $(rngId);
+    n.addEventListener("input", () => { r.value = n.value; refreshLcd(); });
+    r.addEventListener("input", () => { n.value = r.value; refreshLcd(); });
+    n.addEventListener("change", () => {
+      const lo = +n.min, hi = +n.max; let v = parseFloat(n.value);
+      if (!isFinite(v)) v = +n.defaultValue; v = Math.min(hi, Math.max(lo, v));
+      if (n.step === "1") v = Math.round(v); n.value = v; r.value = v; refreshLcd();
+    });
+  }
+  bindPair("stretch", "stretchR"); bindPair("cycle", "cycleR"); bindPair("freq", "freqR");
+  $("freqOn").addEventListener("change", () => {
+    const on = $("freqOn").checked;
+    $("freq").disabled = !on; $("freqR").disabled = !on;
+    $("freqNote").textContent = on ? "Manual: grains are placed every sample rate ÷ this value." : "Linked: 41000 ÷ cycle length, as in the original.";
+    refreshLcd();
+  });
+  $("bpmApply").addEventListener("click", () => {
+    const a = parseFloat($("bpmFrom").value), b = parseFloat($("bpmTo").value);
+    if (!(a > 0 && b > 0)) { status("Enter both the loop BPM and the target BPM.", true); return; }
+    const pct = Math.min(2000, Math.max(25, +(a / b * 100).toFixed(2)));
+    $("stretch").value = pct; $("stretchR").value = Math.min(400, pct); refreshLcd();
+    status("Stretch set to " + pct + "% (" + a + " → " + b + " BPM).");
+  });
+
+  function draw(cv, samples, channels, color) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.max(1, Math.floor(w * dpr)); cv.height = Math.floor(h * dpr);
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, w, h);
+    g.strokeStyle = "#d4d2ca"; g.lineWidth = 1; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+    if (!samples || !samples.length) return;
+    const frames = Math.floor(samples.length / channels), per = Math.max(1, frames / w);
+    g.fillStyle = color;
+    for (let x = 0; x < w; x++) {
+      const a = Math.floor(x * per) * channels, b = Math.min(samples.length, Math.floor((x + 1) * per) * channels);
+      let mn = 0, mx = 0;
+      for (let i = a; i < b; i += Math.max(1, Math.floor((b - a) / 400))) { const v = samples[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      const y1 = h / 2 - (mx / 32768) * (h / 2 - 2), y2 = h / 2 - (mn / 32768) * (h / 2 - 2);
+      g.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+    }
+  }
+  function redraw() {
+    draw($("cvIn"), st.src && st.src.samples, st.src ? st.src.channels : 1, "#2b4a7a");
+    draw($("cvOut"), st.out, st.src ? st.src.channels : 1, "#b3360a");
+  }
+  window.addEventListener("resize", redraw);
+
+  function loadSource(src, name) {
+    st.src = src; st.name = name; st.out = null;
+    $("lcdName").textContent = name.toUpperCase();
+    $("lcdFmt").textContent = src.kind + " · " + src.rate + " HZ · " + src.bits + "-BIT · " + (src.channels === 1 ? "MONO" : src.channels === 2 ? "STEREO" : src.channels + " CH");
+    $("lcdLen").textContent = fmtTime(src.samples.length / src.channels, src.rate);
+    $("capIn").textContent = fmtTime(src.samples.length / src.channels, src.rate);
+    $("capOut").textContent = "—";
+    $("go").disabled = false; $("playIn").disabled = false; $("playOut").disabled = true; $("save").disabled = true;
+    status(src.native16 ? "Loaded. Press TIMESTRETCH." : "Loaded. Converted from " + src.bits + "-bit to 16-bit, as the original only works in 16-bit.");
+    refreshLcd(); redraw();
+  }
+
+  async function loadFile(f) {
+    if (!f) return;
+    try {
+      const buf = await f.arrayBuffer();
+      loadSource(AK.parse(buf), f.name.replace(/\.(wav|wave|aif|aiff)$/i, ""));
+    } catch (e) { status(e.message + " Try a WAV or AIFF file.", true); }
+  }
+  $("file").addEventListener("change", e => loadFile(e.target.files[0]));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+  document.addEventListener("dragover", e => e.preventDefault());
+  document.addEventListener("drop", e => { e.preventDefault(); if (!drop.contains(e.target)) loadFile(e.dataTransfer.files[0]); });
+
+  // Synthesized demo: a 2-bar breakbeat-ish loop at 136 BPM, mono 44.1k
+  function demo() {
+    const rate = 44100, bpm = 136, step = 60 / bpm / 4, steps = 32, n = Math.round(step * steps * rate);
+    const out = new Float32Array(n);
+    let seed = 12345; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 2 - 1;
+    const kick = [0, 10, 16, 26], snare = [4, 12, 20, 28], ghost = [7, 15, 23, 30], hat = [...Array(32).keys()].filter(i => i % 2 === 0);
+    const hit = (s, fn, len) => { const st0 = Math.round(s * step * rate); for (let i = 0; i < len * rate && st0 + i < n; i++) out[st0 + i] += fn(i / rate); };
+    kick.forEach(s => hit(s, t => Math.sin(2 * Math.PI * (50 * t + 90 * (1 - Math.exp(-t * 30)) / 30)) * Math.exp(-t * 9) * 0.9, 0.35));
+    snare.forEach(s => hit(s, t => (rnd() * 0.7 + Math.sin(2 * Math.PI * 190 * t) * 0.5) * Math.exp(-t * 16) * 0.8, 0.25));
+    ghost.forEach(s => hit(s, t => rnd() * Math.exp(-t * 35) * 0.3, 0.1));
+    hat.forEach(s => hit(s, t => rnd() * Math.exp(-t * 70) * 0.22, 0.06));
+    const s16 = new Int16Array(n); for (let i = 0; i < n; i++) s16[i] = Math.max(-32768, Math.min(32767, Math.round(Math.tanh(out[i]) * 30000)));
+    loadSource({ samples: s16, channels: 1, rate, bits: 16, native16: true, kind: "DEMO" }, "demo_break_136");
+    $("bpmFrom").value = 136; $("bpmTo").value = 170;
+    status("Demo loop loaded (synthesized 136 BPM break). Try the tempo helper, then TIMESTRETCH.");
+  }
+  $("demoBtn").addEventListener("click", demo);
+
+  $("go").addEventListener("click", () => {
+    if (!st.src) return;
+    const p = params(), t0 = performance.now();
+    const r = AK.stretch(st.src.samples, st.src.channels, st.src.rate, p.stretch, p.cycle, p.freq);
+    st.out = r.out; st.outName = st.name + "_akaized";
+    $("capOut").textContent = fmtTime(r.out.length / st.src.channels, st.src.rate);
+    $("playOut").disabled = false; $("save").disabled = false;
+    status("Done in " + Math.round(performance.now() - t0) + " ms · " + p.stretch + "% · cycle " + p.cycle + " · " + p.freq + " cps.");
+    redraw();
+  });
+
+  function play(samples) {
+    stop();
+    if (!samples || !samples.length) return;
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const ch = st.src.channels, frames = Math.floor(samples.length / ch);
+    const ab = actx.createBuffer(ch, frames, st.src.rate);
+    for (let c = 0; c < ch; c++) { const d = ab.getChannelData(c); for (let i = 0; i < frames; i++) d[i] = samples[i * ch + c] / 32768; }
+    const n = actx.createBufferSource(); n.buffer = ab; n.connect(actx.destination); n.start(); playing = n;
+    n.onended = () => { if (playing === n) playing = null; };
+  }
+  function stop() { if (playing) { try { playing.stop(); } catch (e) {} playing = null; } }
+  $("playIn").addEventListener("click", () => play(st.src && st.src.samples));
+  $("playOut").addEventListener("click", () => play(st.out));
+  $("stop").addEventListener("click", stop);
+
+  let dl = null;
+  if (window.claude && window.claude.use) window.claude.use("downloads").then(d => { dl = d; }).catch(() => {});
+  $("save").addEventListener("click", async () => {
+    if (!st.out) return;
+    const wav = AK.writeWav(st.out, st.src.channels, st.src.rate);
+    if (dl) {
+      try {
+        await dl.save({ filename: st.outName + ".zip", data: AK.zip1(st.outName + ".wav", wav) });
+        status("Saved " + st.outName + ".zip (contains " + st.outName + ".wav).");
+      } catch (e) {
+        if (e && e.code === "declined") status("Save cancelled.");
+        else status("Saving isn't available here (" + ((e && e.code) || "error") + ").", true);
+      }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+    const a = document.createElement("a"); a.href = url; a.download = st.outName + ".wav";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    status("Saved " + st.outName + ".wav.");
+  });
+
+  refreshLcd(); redraw();
+})();
+</script>

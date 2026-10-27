@@ -1,0 +1,148 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # lets the build publish a GitHub Release
+
+jobs:
+  macos:
+    name: macOS universal (AU + VST3 + Standalone)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE download
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-8.0.4-${{ runner.os }}
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+
+      - name: Run tests
+        run: |
+          set +e
+          ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests > tests.log 2>&1
+          code=$?
+          cat tests.log
+          grep -F "[FAIL]" tests.log | while IFS= read -r line; do echo "::error title=Unit test::$line"; done
+          tail -1 tests.log | sed 's/^/::notice title=Unit tests::/'
+          exit $code
+
+      - name: Render UI snapshot
+        run: ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests --snapshot ui-snapshot.png
+
+      - name: Ad-hoc sign
+        run: |
+          codesign --force --deep --sign - build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3
+          codesign --force --deep --sign - build/TwistedTimestretch_artefacts/Release/AU/TwistedTimestretch.component
+          codesign --force --deep --sign - "build/TwistedTimestretch_artefacts/Release/Standalone/TwistedTimestretch.app"
+
+      - name: Validate AU (auval)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/TwistedTimestretch_artefacts/Release/AU/TwistedTimestretch.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -a | grep -i twisted || true
+          auval -strict -v aumu Twts Twgn
+
+      - name: Host round trip (AU + VST3, as a DAW does it)
+        run: |
+          set +e
+          for target in "build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3" "TwistedTimestretch.component"; do
+            ./build/TwistedTimestretchHostTest_artefacts/Release/TwistedTimestretchHostTest "$target" > host.log 2>&1
+            code=$?
+            cat host.log
+            while IFS= read -r line; do
+              case "$line" in
+                *"[FAIL]"*) echo "::error title=HostTest $target::$line" ;;
+                *) [ -n "$line" ] && echo "::notice title=HostTest $target::$line" ;;
+              esac
+            done < host.log
+            [ $code -ne 0 ] && failed=1
+          done
+          exit ${failed:-0}
+
+      - name: Validate VST3 (pluginval)
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 7 --validate-in-process \
+            --validate build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          ditto build/TwistedTimestretch_artefacts/Release/AU/TwistedTimestretch.component dist/TwistedTimestretch.component
+          ditto build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3 dist/TwistedTimestretch.vst3
+          ditto "build/TwistedTimestretch_artefacts/Release/Standalone/TwistedTimestretch.app" "dist/Twisted Timestretch.app"
+          cp ui-snapshot.png dist/
+          cp web/Akaizer.html dist/Akaizer-browser.html
+          cat > dist/INSTALL.txt <<'EOF'
+          TWISTED TIMESTRETCH - install
+
+          Audio Unit (Logic, GarageBand, Ableton, MainStage):
+            Copy TwistedTimestretch.component -> ~/Library/Audio/Plug-Ins/Components/
+          VST3 (Ableton, Bitwig, Reaper...):
+            Copy TwistedTimestretch.vst3      -> ~/Library/Audio/Plug-Ins/VST3/
+          App (no DAW needed):
+            Drag "Twisted Timestretch.app" into /Applications
+
+          Then in Terminal (downloaded files are quarantined by macOS):
+            xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/TwistedTimestretch.component
+            xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/TwistedTimestretch.vst3
+            xattr -dr com.apple.quarantine "/Applications/Twisted Timestretch.app"
+            killall -9 AudioComponentRegistrar
+
+          Logic: it appears under Instrument > AU Instruments > Twisted Genetics.
+          Ableton: Settings > Plug-Ins > Rescan, then Plug-Ins > Twisted Genetics.
+          EOF
+          cd dist && ditto -c -k --keepParent . ../TwistedTimestretch-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TwistedTimestretch-macOS
+          path: TwistedTimestretch-macOS.zip
+
+      # Every green build of main becomes a downloadable Release.
+      - name: Publish release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^project(TwistedTimestretch VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          TAG="v${VERSION}-build.${{ github.run_number }}"
+          gh release create "$TAG" TwistedTimestretch-macOS.zip ui-snapshot.png \
+            --target "${{ github.sha }}" \
+            --title "Twisted Timestretch ${VERSION} (build ${{ github.run_number }})" \
+            --latest \
+            --notes "$(git log -1 --pretty=%B)
+
+          Install: unzip, then follow INSTALL.txt (copy the .component / .vst3 into your plug-in folders or the app into Applications, clear quarantine, rescan)."
+
+  linux-tests:
+    name: Linux (VST3 build + tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libasound2-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev xvfb
+      - name: Configure
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j 4
+      - name: Run tests
+        run: xvfb-run -a ./build/TwistedTimestretchTests_artefacts/Release/TwistedTimestretchTests
+      - name: Host round trip (VST3)
+        run: xvfb-run -a ./build/TwistedTimestretchHostTest_artefacts/Release/TwistedTimestretchHostTest build/TwistedTimestretch_artefacts/Release/VST3/TwistedTimestretch.vst3
