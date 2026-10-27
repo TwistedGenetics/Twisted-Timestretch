@@ -9,6 +9,9 @@
 */
 #include <JuceHeader.h>
 #include <iostream>
+#if JUCE_MAC
+ #include <CoreFoundation/CoreFoundation.h>
+#endif
 
 static int failures = 0, checks = 0;
 static void check (bool ok, const juce::String& what)
@@ -37,6 +40,37 @@ static bool injectRawState (juce::AudioPluginInstance& inst, const juce::MemoryB
             return true;
         }
     }
+
+   #if JUCE_MAC
+    // AU: the ClassInfo dictionary, usually a binary plist. Swap in our chunk.
+    if (auto* cfData = CFDataCreate (nullptr, (const UInt8*) current.getData(), (CFIndex) current.getSize()))
+    {
+        bool done = false;
+        CFPropertyListFormat fmt;
+        if (auto plist = CFPropertyListCreateWithData (nullptr, cfData, kCFPropertyListMutableContainersAndLeaves, &fmt, nullptr))
+        {
+            if (CFGetTypeID (plist) == CFDictionaryGetTypeID())
+            {
+                auto dict = (CFMutableDictionaryRef) plist;
+                if (CFDictionaryContainsKey (dict, CFSTR ("jucePluginState")))
+                {
+                    auto* chunk = CFDataCreate (nullptr, (const UInt8*) raw.getData(), (CFIndex) raw.getSize());
+                    CFDictionarySetValue (dict, CFSTR ("jucePluginState"), chunk);
+                    CFRelease (chunk);
+                    if (auto* out = CFPropertyListCreateData (nullptr, plist, fmt, 0, nullptr))
+                    {
+                        inst.setStateInformation (CFDataGetBytePtr (out), (int) CFDataGetLength (out));
+                        CFRelease (out);
+                        done = true;
+                    }
+                }
+            }
+            CFRelease (plist);
+        }
+        CFRelease (cfData);
+        if (done) return true;
+    }
+   #endif
 
     const auto text = current.toString();
     if (text.contains ("<plist"))
