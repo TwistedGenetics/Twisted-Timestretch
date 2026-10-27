@@ -61,12 +61,11 @@ jobs:
             ./build/TwistedTimestretchHostTest_artefacts/Release/TwistedTimestretchHostTest "$target" > host.log 2>&1
             code=$?
             cat host.log
-            while IFS= read -r line; do
-              case "$line" in
-                *"[FAIL]"*) echo "::error title=HostTest $target::$line" ;;
-                *) [ -n "$line" ] && echo "::notice title=HostTest $target::$line" ;;
-              esac
-            done < host.log
+            # GitHub keeps only 10 annotations per step: report failures, skips and one summary per format.
+            name=$(basename "$target")
+            grep -E "\[FAIL\]" host.log | while IFS= read -r line; do echo "::error title=HostTest $name::$line"; done
+            grep -E "\[SKIP\]|could not load|instance error" host.log | while IFS= read -r line; do echo "::warning title=HostTest $name::$line"; done
+            echo "::notice title=HostTest $name::$(tail -1 host.log)"
             [ $code -ne 0 ] && failed=1
           done
           exit ${failed:-0}
